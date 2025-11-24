@@ -103,10 +103,10 @@ impl Emu {
     }
 
     fn execute(&mut self, opcode: u16) {
-        let digit_one = opcode & 0x0F;
-        let digit_two = (opcode >> 4) & 0x0F;
-        let digit_three = (opcode >> 8) & 0x0F;
-        let digit_four = (opcode >> 12) & 0x0F;
+        let digit_one = (opcode >> 12) & 0x0F;
+        let digit_two = (opcode >> 8) & 0x0F;
+        let digit_three = (opcode >> 4) & 0x0F;
+        let digit_four = opcode & 0x0F;
         match (digit_one, digit_two, digit_three, digit_four) {
             (0, 0, 0, 0) => return,
             (0, 0, 0xE, 0) => self.screen = [false; SCREEN_WIDTH * SCREEN_HEIGHT],
@@ -137,12 +137,52 @@ impl Emu {
             (8, _, _, 1) => self.v_reg[digit_two as usize] |= self.v_reg[digit_three as usize],
             (8, _, _, 2) => self.v_reg[digit_two as usize] &= self.v_reg[digit_three as usize],
             (8, _, _, 3) => self.v_reg[digit_two as usize] ^= self.v_reg[digit_three as usize],
+            (8, _, _, 4) => {
+                let (sum, carry) = self.v_reg[digit_two as usize].overflowing_add(self.v_reg[digit_three as usize]);
+                self.v_reg[digit_two as usize] = sum;
+                self.v_reg[0xF] = if carry {1} else {0};
+            },
+            (8, _, _, 5) => {
+                let (sum, negative_carry) = self.v_reg[digit_two as usize].overflowing_sub(self.v_reg[digit_three as usize]);
+                self.v_reg[digit_two as usize] = sum;
+                self.v_reg[0xF] = if negative_carry {0} else {1};
+            },
+            (8, _, _, 6) => {
+                let dropped_bit = self.v_reg[digit_two as usize] & 1;
+                self.v_reg[digit_two as usize] = self.v_reg[digit_two as usize] >> 1;
+                self.v_reg[0xF] = dropped_bit;
+            },
+            (8, _, _, 7) => {
+                let (sum, negative_carry) = self.v_reg[digit_three as usize].overflowing_sub(self.v_reg[digit_two as usize]);
+                self.v_reg[digit_three as usize] = sum;
+                self.v_reg[0xF] = if negative_carry {0} else {1};
+            },
+            (8, _, _, 0xE) => {
+                let dropped_bit = if self.v_reg[digit_two as usize] > 127 {1} else {0};
+                self.v_reg[digit_two as usize] = self.v_reg[digit_two as usize] << 1;
+                self.v_reg[0xF] = dropped_bit;
+            },
+            (9, _, _, 0) => {
+                if (self.v_reg[digit_two as usize]) != (self.v_reg[digit_three as usize]) {
+                    self.program_counter += 2;
+                }
+            },
+            (0xA, _, _, _) => self.i_reg = opcode & 0xFFF,
+            (0xB, _, _, _) => self.program_counter = (opcode & 0xFFF) + (self.v_reg[0] as u16),
+            (0xF, _, 1, 0xE) => self.i_reg += self.v_reg[digit_two as usize] as u16,
+            (0xF, _, 5, 5) => {
+                for x in 0..digit_two {
+                    self.ram[self.i_reg as usize + x as usize] = self.v_reg[x as usize];
+                }
+            },
             (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", opcode),
         }
     }
 
     fn timer_ticks(&mut self) {
-        if self.delay_timer > 0 { self.delay_timer -= 1; }
+        if self.delay_timer > 0 { 
+            self.delay_timer -= 1; 
+        }
 
         if self.sound_timer == 1 {
             //beep(); we will implement sound later
