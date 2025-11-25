@@ -1,3 +1,5 @@
+use rand::random;
+
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
 
@@ -169,10 +171,81 @@ impl Emu {
             },
             (0xA, _, _, _) => self.i_reg = opcode & 0xFFF,
             (0xB, _, _, _) => self.program_counter = (opcode & 0xFFF) + (self.v_reg[0] as u16),
-            (0xF, _, 1, 0xE) => self.i_reg += self.v_reg[digit_two as usize] as u16,
+            (0xC, _, _, _) => {
+                let rand_val: u8 = random();
+                self.v_reg[digit_two as usize] = rand_val & (opcode & 0xFF) as u8;
+            },
+            (0xD, _, _, _) => {
+                let x_coord = self.v_reg[digit_two as usize] as u16;
+                let y_coord = self.v_reg[digit_three as usize] as u16;
+                let rows = digit_four;
+                let mut flipped = false;
+                
+                for y_line in 0..rows {
+                    let addr = self.i_reg + y_line as u16;
+                    let pixels = self.ram[addr as usize];
+                    for x_line in 0..8 {
+                        if(pixels & (0b1000_0000 >> x_line)) != 0 {
+                            let x = (x_coord + x_line) as usize % SCREEN_WIDTH;
+                            let y = (y_coord + y_line) as usize % SCREEN_HEIGHT;
+                            let idx = x + SCREEN_WIDTH * y;
+                            flipped |= self.screen[idx];
+                            self.screen[idx] ^= true;
+                        }
+                    }
+                }
+
+                if flipped {
+                    self.v_reg[0xF] = 1;
+                } else {
+                    self.v_reg[0xF] = 0;
+                }
+            },
+            (0xE, _, 9, 0xE) => {
+                let vx = self.v_reg[digit_two as usize];
+                let key = self.keys[vx as usize];
+                if key {
+                    self.program_counter += 2;
+                }
+            },
+            (0xE, _, 0xA, 1) => {
+                let vx = self.v_reg[digit_two as usize];
+                let key = self.keys[vx as usize];
+                if !key {
+                    self.program_counter += 2;
+                }
+            },
+            (0xF, _, 0, 7) => self.v_reg[digit_two as usize] = self.delay_timer,
+            (0xF, _, 0, 0xA) => {
+                let mut pressed = false;
+                for i in 0..self.keys.len() {
+                    if self.keys[i] {
+                        pressed = true;
+                        self.v_reg[digit_two as usize] = i as u8;
+                        break;
+                    }
+                }
+                if !pressed {
+                    self.program_counter -= 2;
+                }
+            },
+            (0xF, _, 1, 5) => self.delay_timer = self.v_reg[digit_two as usize],
+            (0xF, _, 1, 8) => self.sound_timer = self.v_reg[digit_two as usize],
+            (0xF, _, 1, 0xE) => self.i_reg = self.i_reg.wrapping_add(self.v_reg[digit_two as usize] as u16),
+            (0xF, _, 2, 9) => self.i_reg = 5 * self.v_reg[digit_two as usize] as u16,
+            (0xF, _, 3, 3) => {
+                self.ram[self.i_reg as usize] = (self.v_reg[digit_two as usize] / 100) % 10;
+                self.ram[self.i_reg as usize + 1] = (self.v_reg[digit_two as usize] / 10) % 10;
+                self.ram[self.i_reg as usize + 2] = self.v_reg[digit_two as usize] % 10;
+            },
             (0xF, _, 5, 5) => {
                 for x in 0..digit_two {
                     self.ram[self.i_reg as usize + x as usize] = self.v_reg[x as usize];
+                }
+            },
+            (0xF, _, 6, 5) => {
+                for i in 0..=(digit_two as usize) {
+                    self.v_reg[i] = self.ram[(self.i_reg as usize) + i];
                 }
             },
             (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", opcode),
