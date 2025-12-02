@@ -156,7 +156,7 @@ impl Emu {
             },
             (8, _, _, 7) => {
                 let (sum, negative_carry) = self.v_reg[digit_three as usize].overflowing_sub(self.v_reg[digit_two as usize]);
-                self.v_reg[digit_three as usize] = sum;
+                self.v_reg[digit_two as usize] = sum;
                 self.v_reg[0xF] = if negative_carry {0} else {1};
             },
             (8, _, _, 0xE) => {
@@ -234,12 +234,12 @@ impl Emu {
             (0xF, _, 1, 0xE) => self.i_reg = self.i_reg.wrapping_add(self.v_reg[digit_two as usize] as u16),
             (0xF, _, 2, 9) => self.i_reg = 5 * self.v_reg[digit_two as usize] as u16,
             (0xF, _, 3, 3) => {
-                self.ram[self.i_reg as usize] = (self.v_reg[digit_two as usize] / 100) % 10;
+                self.ram[self.i_reg as usize] = self.v_reg[digit_two as usize] / 100;
                 self.ram[self.i_reg as usize + 1] = (self.v_reg[digit_two as usize] / 10) % 10;
                 self.ram[self.i_reg as usize + 2] = self.v_reg[digit_two as usize] % 10;
             },
             (0xF, _, 5, 5) => {
-                for x in 0..digit_two {
+                for x in 0..=digit_two {
                     self.ram[self.i_reg as usize + x as usize] = self.v_reg[x as usize];
                 }
             },
@@ -252,16 +252,29 @@ impl Emu {
         }
     }
 
-    fn timer_ticks(&mut self) {
+    pub fn timer_ticks(&mut self) {
+        if self.sound_timer == 1 {
+            //beep(); we will implement sound later
+        }
+        
         if self.delay_timer > 0 { 
             self.delay_timer -= 1; 
         }
 
-        if self.sound_timer == 1 {
-            //beep(); we will implement sound later
-        }
-
         if self.sound_timer > 0 { self.sound_timer -= 1; }
+    }
+
+    pub fn get_display(&self) -> &[bool] {
+        &self.screen
+    }
+
+    pub fn set_key(&mut self, key: usize, press: bool) {
+        self.keys[key] = press;
+    }
+
+    pub fn load(&mut self, bytes: &[u8]) {
+        let start = START_ADDR as usize;
+        self.ram[start..(start + bytes.len())].copy_from_slice(bytes);
     }
     
 }
