@@ -1,4 +1,6 @@
 use rand::random;
+use rodio::{OutputStream, OutputStreamHandle, Sink};
+use rodio::source::SineWave;
 
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
@@ -40,10 +42,19 @@ pub struct Emu {
     keys: [bool; NUM_KEYS],
     delay_timer: u8,
     sound_timer: u8,
+    #[allow(dead_code)]
+    audio_stream: Option<OutputStream>,
+    #[allow(dead_code)]
+    audio_handle: Option<OutputStreamHandle>,
+    beep_sink: Option<Sink>,
 }
 
 impl Emu {
     pub fn new() -> Self {
+        let (stream, handle) = OutputStream::try_default().unwrap();
+        let sink = Sink::try_new(&handle).unwrap();
+        sink.append(SineWave::new(440.0));
+        sink.pause(); 
         let mut new_emu = Self {
             program_counter: START_ADDR,
             ram: [0; RAM_SIZE],
@@ -55,6 +66,9 @@ impl Emu {
             keys: [false; NUM_KEYS],
             delay_timer: 0,
             sound_timer: 0,
+            audio_stream: Some(stream),
+            audio_handle: Some(handle),
+            beep_sink: Some(sink),
         };
 
         for i in 0..FONTSET_SIZE {
@@ -252,18 +266,29 @@ impl Emu {
         }
     }
 
-    pub fn timer_ticks(&mut self) {
-        if self.sound_timer == 1 {
-            //beep(); we will implement sound later
-        }
-        
-        if self.delay_timer > 0 { 
-            self.delay_timer -= 1; 
+    pub fn timer_ticks(&mut self) { 
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
         }
 
-        if self.sound_timer > 0 { self.sound_timer -= 1; }
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
+            if let Some(sink) = &self.beep_sink {
+                sink.play();
+            }
+        } else {
+            if let Some(sink) = &self.beep_sink {
+                sink.pause();
+            }
+        }
     }
-
+    
+    // pub fn beep(&self) {
+    //      let (_stream, handle) = OutputStream::try_default().unwrap(); 
+    //      let sink = Sink::try_new(&handle).unwrap(); 
+    //      sink.append(SineWave::new(440.0).take_duration(std::time::Duration::from_millis(100))); 
+    //      sink.detach(); 
+    // }
     pub fn get_display(&self) -> &[bool] {
         &self.screen
     }
