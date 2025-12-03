@@ -9,19 +9,20 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 use sdl2::keyboard::Keycode;
 
+
 use chip8_core::*;
 
 const SCALE: u32 = 15;
 const WINDOW_WIDTH: u32 = (SCREEN_WIDTH as u32) * SCALE;
 const WINDOW_HEIGHT: u32 = (SCREEN_HEIGHT as u32) * SCALE;
-const TICKS_PER_FRAME: usize = 10;
+// const TICKS_PER_FRAME: usize = 10;
 
 fn draw_screen(emu: &Emu, canvas: &mut Canvas<Window>) {
-    canvas.set_draw_color(Color::BLACK);
+    canvas.set_draw_color(Color::RGB(70,97,106));
     canvas.clear();
 
     let screen_buf = emu.get_display();
-    canvas.set_draw_color(Color::WHITE);
+    canvas.set_draw_color(Color::RGB(214, 162, 173));
     for(i, pixel) in screen_buf.iter().enumerate() {
         if *pixel {
             let x = (i % SCREEN_WIDTH) as u32;
@@ -55,7 +56,36 @@ fn key2button(key: Keycode) -> Option<usize> {
         _ => None,
     }
 }
+fn game_speed(path: &str) -> usize {
+    let name = path.to_lowercase();
 
+    match name.as_str() {
+        n if n.contains("15puzzle") => 15,
+        n if n.contains("blinky") => 25,
+        n if n.contains("blitz") => 2,
+        n if n.contains("brix") || n.contains("vbrix") => 10,
+        n if n.contains("connect4") => 1,
+        n if n.contains("guess") => 15,
+        n if n.contains("hidden") => 1,
+        n if n.contains("invaders") => 12,
+        n if n.contains("kaleid") => 9,
+        n if n.contains("maze") => 9,
+        n if n.contains("merlin") => 9,
+        n if n.contains("missile") => 10,
+        n if n.contains("pong2") => 10,
+        n if n.contains("pong") => 10,
+        n if n.contains("puzzle") => 5,
+        n if n.contains("syzygy") => 6,
+        n if n.contains("tank") => 11,
+        n if n.contains("tetris") => 10,
+        n if n.contains("tictac") => 12,
+        n if n.contains("ufo") => 11,
+        n if n.contains("vers") => 15,
+        n if n.contains("wipeoff") => 13,
+        // default for other games
+        _ => 10,
+    }
+}
 fn main() {
     let args: Vec<_> = env::args().collect();
     if args.len() != 2 {
@@ -84,6 +114,8 @@ fn main() {
     rom.read_to_end(&mut buffer).unwrap();
     chip8.load(&buffer);
 
+    let ticks_per_frame = game_speed(&args[1]);
+
     'gameloop: loop {
         for evt in event_pump.poll_iter() {
             match evt {
@@ -103,7 +135,7 @@ fn main() {
                 _ => ()
             }
         }
-        for _i in 0..TICKS_PER_FRAME {
+        for _i in 0..ticks_per_frame {
             chip8.tick();
         }
         chip8.timer_ticks();
